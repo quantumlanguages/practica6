@@ -1,0 +1,2 @@
+//Programa que hace un ciclo infinito
+while (true) do void end :: Boolean

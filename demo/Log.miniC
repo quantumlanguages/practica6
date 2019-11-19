@@ -1,0 +1,14 @@
+//Programa que obtiene el log de un numero
+let log := fn n => let x := alloc 1 in
+                     let y := alloc 0 in
+                       (while (!x < n) do
+                         x ::= !x + !x;
+  			 y ::= !y + 1
+                        end);
+                       !y
+                     end
+                   end
+in
+  log $ 100
+end :: Integer
+
