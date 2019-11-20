@@ -33,9 +33,14 @@ module BAE.Sintax where
                 | Alloc Expr -- ^ Guardar en memoria
                 | Deref Expr -- ^ Borrar de memeoria
                 | Assig Expr Expr -- ^ Actualizar
-                | Void -- ^ Instrucción terminada
                 | Seq Expr Expr -- ^ Secuencia de instrucciones
                 | While Expr Expr -- ^ Ciclo de control
+                | Raise Expr
+                | Handle Expr Identifier Expr
+                | Letcc Identifier Expr
+                | Continue Expr Expr
+                | Cont Stack
+                | Error
                 deriving (Eq)
 
     -- | Implementando la clase Show para hacer la representación más estética
@@ -67,6 +72,8 @@ module BAE.Sintax where
             (Void) -> "void"
             (Seq e1 e2) -> (show e1) ++ " ; " ++ (show e2)
             (While e1 e2) -> "while(" ++ (show e1) ++ ") do " ++ (show e2) ++ " end"
+            (Raise e) ->
+            ()
 
     -- Tipo de marcos vacíos
     type Pending = ()
@@ -94,6 +101,14 @@ module BAE.Sintax where
                | AppFR Expr Pending
                | IfF Pending Expr Expr
                | LetF Identifier Pending Expr
+               | AllocF Pending -- ^ Guardar en memoria
+               | DerefF Pending -- ^ Borrar de memeoria
+               | AssingFL Pending Expr -- ^ Actualizar
+               | AssingFR Expr Pending -- ^ Actualizar
+               | SeqFL Pending Expr -- ^ Secuencia de instrucciones
+               | SeqFR Expr Pending -- ^ Secuencia de instrucciones
+               | WhileFL Pending Expr -- ^ Ciclo de control
+               | WhileFR Expr Pending -- ^ Ciclo de control
                | RaiseF Pending
                | HandleF Pending Identifier Expr
                | ContinueL Pending Expr
@@ -105,9 +120,16 @@ module BAE.Sintax where
       show ex =
         case ex of
           (SuccF _) -> "suc(-)"
-          (Pred _) -> "pred(-)"
+          (PredF _) -> "pred(-)"
+          (NotF _) -> "not(-)"
+          (FnF _) -> "fn(-)"
           (AddFL _ e) -> "add(-, " ++ (show e) ++ ")"
-          (AddFR e _) -> "add(" + (show e) ++ ", -)"
+          (AddFR e _) -> "add(" ++ (show e) ++ ", -)"
+          (IfF _, e1, e2) -> "if(-, " ++ (show e1) ++ ", " ++ (show e2) ++ ")"
+          (AppFL _, e2) -> "app(-, " ++ (show e2) ++ ")"
+          (AppFR e1, _) -> "app(" ++ (show e1) ++ ", -)"
+          (AddFL _, e2) -> "add(-, " ++ (show e2) ++ ")"
+          (AddFR e1, _) -> "add(" ++ (show e1) ++ ", -)"
 
     -- | La asignacion de variables sera emulada usando substitucion textual
     type Substitution = (Identifier, Expr)
