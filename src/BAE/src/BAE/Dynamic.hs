@@ -52,6 +52,7 @@ module BAE.Dynamic where
                       (B _) -> R (s, m, e)
                       (I _) -> R (s, m, e)
                       (L _) -> R (s, m, e)
+                      (Void) -> R(s, m, e)
                       (I _) -> R (s, m, e)
                       (Cont _) -> R (s, m, e)
                       -- operadores unitarios
@@ -117,7 +118,7 @@ module BAE.Dynamic where
                       (If e1 e2 e3) -> E ((IfF Pending e2 e3):s, m, e1)
                       (Let x e1 e2) -> E ((LetF x Pending e2):s, m, e2)
                       (Letcc i e) -> E (s, m, Sintax.subst e (x, Cont s))
-  eval1 (R (s, e)) =
+  eval1 (R (s, m, e)) =
     case e of
       (V x) ->
         case s of
@@ -157,9 +158,10 @@ module BAE.Dynamic where
           ((App _ e2) : s') -> E (s', Sintax.subst e2 (x, e))
           ((LetFL x _ e2) : s') -> E (s', Sintax.subst e2 (x, e))
           _ -> P (s, Error)
-  eval1 (P (s, Error)) ->
+  eval1 (P (s, m, e)) =
     case s of
-      (s:s') -> P (s', Error)
+      (HandleF _ x e1):s' -> E (s', m, Sintax.subst e1 (x, e))
+      (_:s') -> P (s', Error)
 
 
 
