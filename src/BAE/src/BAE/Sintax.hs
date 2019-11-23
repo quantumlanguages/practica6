@@ -194,6 +194,7 @@ module BAE.Sintax where
             (Handle i e f) -> union (frVars e) ((frVars f) \\ [i])
             (Letcc) ->
             (Continue e f) -> union (frVars e) (frVars f)
+            (Cont s) -> []
 
     -- | Incrementa el sufijo numerico de un identificador. Si no hay valor numerico
     -- presente, entonces añade '1' al final del identificador.
@@ -230,6 +231,9 @@ module BAE.Sintax where
             Fix x e ->
                 let x' = safeName x e; e' = subst e (x, V x') in
                     Fix x' e'
+            Handle e1 x e2 ->
+                let x' = safeName x e2; e2' = subst e2 (x, V x') in
+                    Handle e1 x' e2'
             _ -> ex
 
 
@@ -272,6 +276,17 @@ module BAE.Sintax where
             (Void) -> ex
             (Seq e f) -> Seq (st e) (st f)
             (While e f) -> While (st e) (st f)
+            (Raise e) -> Raise (st e)
+            (Handle e x f) ->
+                if x == y || elem x (frVars e')
+                    then st (alphaExpr ex)
+                    else Handle e x (st f)
+            (LetCC x e) ->
+                if x == y || elem x (frVars e')
+                    then st (alphaExpr ex)
+                    else LetCC x (st e)
+            (Continue e f) -> Continue (st e) (st f)
+            (Cont a) -> Cont a
         where st = (flip subst) s
 
     -- | Dice si dos expresiones son alpha equivalentes
@@ -295,6 +310,16 @@ module BAE.Sintax where
     alphaEq (If e1c e11 e12) (If e2c e21 e22) =
         (alphaEq e1c e2c) && (alphaEq e11 e21) && (alphaEq e12 e22)
     alphaEq (Let x e11 e12) (Let y e21 e22) =
-        (alphaEq e11 e21) && (alphaEq e12 (subst e22 (y, V x)))
-    alphaEq (Cont e1) (Cont e2) = e1 == e2
+    (alphaEq e11 e21) && (alphaEq e12 (subst e22 (y, V x)))
+    alphaEq (Alloc e) (Alloc f) = alphaEq e f
+    alphaEq (Deref e) (Deref f) = alphaEq e f
+    alphaEq (Assig e1 e2) (Assig f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
+    alphaEq (Seq e1 e2) (Seq f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
+    alphaEq (While e1 e2) (While f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
+    alphaEq (Raise e) (Raise f) = alphaEq e f
+    alphaEq (Handle e1 x e2) (Handle f1 y f2) =
+        (alphaEq e1 f1) && (alphaEq e2 (subst f2 (y, (V x))))
+    alphaEq (LetCC x e) (LetCC y f) = (alphaEq e (subst f (y, (V x))))
+    alphaEq (Continue e1 e2) (Continue f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
+    alphaEq (Cont s1) (Cont s2) = s1 == s2
     alphaEq _ _ = False
