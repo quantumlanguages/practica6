@@ -259,8 +259,8 @@ module BAE.Dynamic where
       (_:s') -> P (s', mem, Error)
 
 
-
-
+-- Antiguo eval1
+{--
   eval1 (mem, expr) =
     case expr of
       I n -> error "blocked state: integer"
@@ -333,7 +333,7 @@ module BAE.Dynamic where
           else let (mem', e2') = eval1' e2 in (mem', Assig (L i) e2')
       Assig e1 e2 -> let (mem', e1') = eval1' e1 in (mem', Assig e1' e2)
     where eval1' = (\e -> eval1 (mem, e)); sM = (\x -> (mem, x))
-
+--}
 
   evals :: State -> State
   evals (E (s, e)) = evals (eval1 (E (s, e)))
