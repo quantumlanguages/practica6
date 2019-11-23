@@ -208,6 +208,8 @@ module BAE.Dynamic where
       (_:s') -> P (mem, s', e)
 
 
+
+  -- | Evaular un estado exhaustivamente
   evals :: State -> State
   evals s = 
     case eval1 s of

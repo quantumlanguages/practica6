@@ -109,21 +109,181 @@
               | P (Memory, Stack, Expr)
               deriving (Show)
         \end{minted}
-
-
-
     \end{itemize}
 
     \section{Excepciones y Continuaciones}
 
     \begin{itemize}
         \item \tx{eval1}
+
+        Para esta función, había que traducir la función equivalente anterior 
+        que se usó para evaluar expresiones usando memoria.
+
+        Hay diferentes casos por estado.
+
+        \begin{itemize}
+            \item \tx{E (Memory, Stack, Expr)}
+
+            Para estas expresiones, si ya se llegó a un valor en todas las 
+            expresiones necesarioas para determinar el operador, entonces se 
+            pasa al estado \tx{R (Memory, Stack, Expr)} con el valor obtenido 
+            por el operador.
+
+            Si aún falta algo por evaluar, entonces se bota el marco actual y se
+            mete el marco necesario para seguir con la evaluación.
+
+            \begin{minted}{haskell}
+                eval1 (E (m, s, e)) = 
+                    case e of
+                      -- valores
+                      (V _) -> R (m, s, e)
+                      ...
+                      -- operadores unarios
+                      (Succ e1) -> E (m, (SuccF ()):s, e1)
+                      ...
+                      -- operadores binarios
+                      (Add e1 e2) -> E (m, (AddFL () e2):s, e1)
+                      ...
+                      -- otros
+                      (If e1 e2 e3) -> E (m, (IfF () e2 e3):s, e1)
+                      (Let x e1 e2) -> E (m, (LetF x () e2):s, e1)
+                      (Letcc x e1) -> E (m, s, subst e1 (x, Cont s))
+                      -- error
+                      _ -> P (m, s, e)
+            \end{minted}
+
+            \item \tx{R (Memory, Stack, Expr)}
+
+            Se tiene que regresar un valor. Dependiendo del valor y del cómputo
+            pendiente en el tope de la pila de marcos, se realiza alguna
+            operación.
+
+            Como evaluar la expresión resultante, devolver un valor, o manejar 
+            la memoria.
+
+            Ests operaciones fueron una traducción casi directa de las definias 
+            en la versión anterior de \tx{evals}.
+
+            Si no se puede realizar ninguna operación, se propaga un error.
+
+            Se muestran algunos ejemplos de transición de este estado.
+
+            \begin{minted}{haskell}
+            eval1 (R (mem, s, e)) =
+                case e of
+                ...
+                (I m) ->
+                    case s of
+                        ((SuccF _) : s') -> R (mem, s', I (succ m))
+                        ...
+                        ((ContinueFR (Cont s'') _) : s') -> R (mem, s'', e)
+                        _ -> P (mem, s, Raise e)
+                (L i) ->
+                    ...
+                    ((AssigFL _ e2) : s') -> E (mem, ((AssigFR e ()) : s'), e2)
+                    ((AssigFR (L i) _):s') -> 
+                        case update (i, e) mem of
+                            Just mem' -> R (mem', s', Void)
+                            Nothing -> P (mem, s, Raise e)
+                        ...
+                (Void) ->
+                    case s of 
+                        ...
+                        ((SeqF _ e2) : s') -> E (mem, s', e2)
+                        ...
+                (Cont st) ->
+                    case s of
+                        ...
+                        ((ContinueFL _ e2):s') -> E (mem, ((ContinueFR e ()):s'), e2)
+                        ((ContinueFR (Cont s'') _) : s') -> R (mem, s'', e)
+                        _ -> P (mem, s, Raise e)
+                ...
+            \end{minted}
+
+            Es la sección más larga de la función.
+
+            \item \tx{P (Memory, Stack, Expr)}
+
+            Hay dos casos. 
+            
+            Si no se está lidiando con errores, entonces sólo se
+            sacan todos los valores de la pila de marcos hasta llegar al marco
+            vacío. Llegar a este punto significa un error en tiempo de 
+            ejecución.
+
+            Si se está lidiando con errores (usando \tx{handle}), entonces se 
+            desenvuelve el valor de error y se para a la expresión que se usará
+            para recuperarse del error.
+
+            \begin{minted}{haskell}
+                eval1 (P (mem, s, e)) =
+                    case s of
+                        -- lidiando con errores
+                        (HandleF _ x e1):s' ->
+                            case e of 
+                            (Raise e1) -> E (mem, s', subst e1 (x, e1))
+                            _ -> P (mem, s, Raise e)
+                        -- dejando pasar errores
+                        (_:s') -> P (mem, s', e)
+            \end{minted}
+
+        \end{itemize}
         \item\tx{evals}
+
+        El propósito de esta función es dar pasos en la evaluación usando 
+        \tx{eval1} hasta llegar a un estado de fin de evaluación 
+        \tx{R (mem, [], v)} o un estado de error \tx{P (mem, [], e)}.
+
+        En general, hay que vaciar la pila de marcos. Así que simplemente hay 
+        que evaluar el estado hasta que la pila de marcos esté vacía y la 
+        expresión esté bloqueada.
+
+        \begin{minted}{haskell}
+            -- | Evaular un estado exhaustivamente
+            evals :: State -> State
+            evals s = 
+                case eval1 s of
+                s'@(E (_, [], e')) -> if blocked e' then s' else evals s'
+                s'@(E (_, _, e')) -> evals s'
+                s'@(R (_, [], e')) -> if blocked e' then s' else evals s'
+                s'@(R (_, _, e')) -> evals s'
+                s'@(P (_, [], e')) -> if blocked e' then s' else evals s'
+                s'@(P (_, _, e')) -> evals s'
+        \end{minted}
         \item \tx{eval}
+
+        Utiliza \tx{evals} para evaluar lo más posible una expresión. Si es un 
+        valor, se regresa. Si es otra cosa, se lanza un error.
+
+        \begin{minted}{haskell}
+        eval :: Expr -> Expr
+        eval e = 
+            case evals (E ([], [], e)) of
+            R (_, [], e') -> 
+                case e' of
+                B _ -> e'
+                I _ -> e'
+                _ -> error "invalid final value"
+            _ -> error "no value was returned"
+        \end{minted}
     \end{itemize}
 
     \section{Integración}
 
+    Se tuvo que hacer modificaciónes al módulo \tx{Sintax} para incluir las 
+    expresiones concernientes a errores y continuaciones.
+
+    \begin{minted}{haskell}
+        -- | Tipo para las expresiones
+        data Expr = ...
+                    | Raise Expr
+                    | Handle Expr Identifier Expr
+                    | Letcc Identifier Expr
+                    | Continue Expr Expr
+                    | Cont Stack
+                    | Error
+                    deriving (Eq)
+    \end{minted}
     \begin{itemize}
         \item \tx{frVars}
         \item \tx{subst}
