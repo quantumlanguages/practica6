@@ -14,32 +14,39 @@ module BAE.Dynamic where
   import qualified BAE.Type as Type
 
   type Pending = ()
-  data Frame = SuccF Pending
-             | PredF Pending
-             | NotF Pending
-             | FnF Identifier Pending
-             | AddFL Pending Expr
-             | AddFR Expr Pending
-             | MulFL Pending Expr
-             | MulFR Expr Pending
-             | AndFL Pending Expr
-             | AndFR Expr Pending
-             | OrFL Pending Expr
-             | OrFR Expr Pending
-             | LtFL Pending Expr
-             | LtFR Expr Pending
-             | GtFL Pending Expr
-             | GtFR Expr Pending
-             | EqFL Pending Expr
-             | EqFR Expr Pending
-             | AppFL Pending Expr
-             | AppFR Expr Pending
-             | IfF Pending Expr Expr
-             | LetF Identifier Pending Expr
-             | RaiseF Pending
-             | HandleF Pending Identifier Expr
-             | ContinueL Pending Expr
-             | ContinueR Expr Pending
+  data Frame = 
+     SuccF Pending
+    | PredF Pending
+    | NotF Pending
+    | FnF Identifier Pending
+    | AddFL Pending Expr
+    | AddFR Expr Pending
+    | MulFL Pending Expr
+    | MulFR Expr Pending
+    | AndFL Pending Expr
+    | AndFR Expr Pending
+    | OrFL Pending Expr
+    | OrFR Expr Pending
+    | LtFL Pending Expr
+    | LtFR Expr Pending
+    | GtFL Pending Expr
+    | GtFR Expr Pending
+    | EqFL Pending Expr
+    | EqFR Expr Pending
+    | AppFL Pending Expr
+    | AppFR Expr Pending
+    | IfF Pending Expr Expr
+    | LetF Identifier Pending Expr
+    | AllocF Pending -- ^ Guardar en memoria
+    | DerefF Pending -- ^ Borrar de memeoria
+    | AssingFL Pending Expr -- ^ Actualizar
+    | AssingFR Expr Pending -- ^ Actualizar
+    | SeqF Pending Expr -- ^ Secuencia de instrucciones
+    | WhileF Pending Expr -- ^ Ciclo de control
+    | RaiseF Pending
+    | HandleF Pending Identifier Expr
+    | ContinueFL Pending Expr
+    | ContinueFR Expr Pending
 
   type Stack = [Frame]
 
@@ -53,17 +60,17 @@ module BAE.Dynamic where
                       (I _) -> R (s, m, e)
                       (L _) -> R (s, m, e)
                       (Void) -> R(s, m, e)
-                      (I _) -> R (s, m, e)
                       (Cont _) -> R (s, m, e)
+                      (Error) -> R (s, m, e)
                       -- operadores unitarios
-                      (Fn x e) -> E (((FnF x Pending):s), m, e)
-                      (Fix x e) -> E (s, m, Sintax.subst e (x, Fix x e))
-                      (Succ e) -> E ((SuccF Pending):s, m, e)
-                      (Pred e) -> E ((PredF Pending):s, m, e)
-                      (Not e) -> E ((NotF Pending):s, m, e)
-                      (Alloc e) -> E ((AllocF Pending):s, m, e)
-                      (Deref e) -> E ((DerefF Pending):s, m, e)
-                      (Raise e) -> E ((RaiseF Pending):s, m, e)
+                      (Fn x e1) -> E (((FnF x Pending):s), m, e1)
+                      (Fix x e1) -> E (s, m, subst e (x, Fix x e1))
+                      (Succ e1) -> E ((SuccF Pending):s, m, e1)
+                      (Pred e1) -> E ((PredF Pending):s, m, e1)
+                      (Not e1) -> E ((NotF Pending):s, m, e1)
+                      (Alloc e1) -> E ((AllocF Pending):s, m, e1)
+                      (Deref e1) -> E ((DerefF Pending):s, m, e1)
+                      (Raise e1) -> E ((RaiseF Pending):s, m, e1)
                       -- operadores binarios
                       (Add e1 e2) ->
                         case e1 of
@@ -95,20 +102,15 @@ module BAE.Dynamic where
                           _ -> E ((EqFL Pending (e2)):s, m, e1)
                       (App e1 e2) ->
                         case e1 of
-                          (Fn x e) -> E ((AppFR (Fn x e) Pending):s, m, e2)
+                          (Fn x e3) -> E ((AppFR (Fn x e3) Pending):s, m, e2)
                           _ -> E ((EqFL Pending (e2)):s, m, e1)
                       (Assign e1 e2) ->
                         case e1 of
                           (L n) -> E ((AssignFR (L n) Pending):s, m, e2)
                           _ -> E ((AssignFL Pending (e2)):s, m, e1)
-                      (Seq e1 e2) ->
-                        case e1 of
-                          (Void) -> E ((SeqFR (Void) Pending):s, m, e2) -- Revisar que sustituye Void
-                          _ -> E ((SeqFL Pending (e2)):s, m, e1)
-                      (While e1 e2) ->
-                        case e1 of
-                          (B p) -> E ((WhileFR (B p) Pending):s, m, e2)
-                          _ -> E ((WhileFL Pending (e2)):s, m, e1)
+                      (Seq e1 e2) -> E ((SeqF Pending e2):s, m, e1)
+                      (While e1 e2) -> E ((WhileF Pending e2):s, m, e1)
+                      (Raise e1) -> E ((RaiseF Pending):s, m, e1)
                       (Continue e1 e2) ->
                         case e1 of
                           (Cont st) -> E ((ContinueFR (Cont st) Pending):s, m, e2)
@@ -116,52 +118,145 @@ module BAE.Dynamic where
                       (Handle e1 i e2) -> E ((HandleF Pending i e2):s, m, e1)
                       --ternarias
                       (If e1 e2 e3) -> E ((IfF Pending e2 e3):s, m, e1)
-                      (Let x e1 e2) -> E ((LetF x Pending e2):s, m, e2)
-                      (Letcc i e) -> E (s, m, Sintax.subst e (x, Cont s))
-  eval1 (R (s, m, e)) =
+                      (Let x e1 e2) -> E ((LetF x Pending e2):s, m, e1)
+                      (Letcc i e1) -> E (s, m, subst e1 (x, Cont s))
+                      _ -> P (s, m, e)
+  eval1 (R (s, mem, e)) =
     case e of
-      (V x) ->
+      (V y) ->
         case s of
-          ((LetFL x _ e2) : s') -> E (s', Sintax.subst e2 (x, e))
-          _ -> P (s, Error)
+          ((FnF x _) : s') -> R (s', mem, Fn x e)
+          ((LetFL x _ e2) : s') -> E (s', mem, subst e2 (x, e))
+          _ -> P (s, mem, e)
       (I m) ->
         case s of
-          ((FnF x _) : s') -> R (s', Fn x)
-          ((SuccF _) : s') -> R (s', I (succ n))
-          ((PredF _) : s') -> R (s', I (pred n))
-          ((AddFL _ e2) : s') -> E ((AddFR e Pending : s'), e2)
-          ((AddFR (I n) _) : s') -> R (s', I (n+m))
-          ((MulFL _ e2) : s') -> E ((MulFR e Pending : s'), e2)
-          ((MulFR (I n) _) : s') -> R (s', I (n*m))
-          ((LtFL _ e2) : s') -> E ((LtFR e Pending : s'), e2)
-          ((LtFR (I n) _) : s') -> R (s', I (n<m))
-          ((GtFL _ e2) : s') -> E ((GtFR e Pending : s'), e2)
-          ((GtFR (I n) _) : s') -> R (s', I (n>m))
-          ((EqFL _ e2) : s') -> E ((EqFR e Pending : s'), e2)
-          ((EqFR (I n) _) : s') -> R (s', I (n==m))
-          ((LetFL x _ e2) : s') -> E (s', Sintax.subst e2 (x, e))
-          _ -> P (s, Error)
+          ((SuccF _) : s') -> R (s', mem, I (succ m))
+          ((PredF _) : s') -> R (s', mem, I (pred m))
+          ((FnF x _) : s') -> R (s', mem, Fn x e)
+          ((AddFL _ e2) : s') -> E (((AddFR e Pending) : s'), mem, e2)
+          ((AddFR (I n) _) : s') -> R (s', mem, I (n+m))
+          ((MulFL _ e2) : s') -> E (((MulFR e Pending) : s'), mem, e2)
+          ((MulFR (I n) _) : s') -> R (s', mem, I (n*m))
+          ((LtFL _ e2) : s') -> E (((LtFR e Pending) : s'), mem, e2)
+          ((LtFR (I n) _) : s') -> R (s', mem, I (n<m))
+          ((GtFL _ e2) : s') -> E (((GtFR e Pending) : s'), mem, e2)
+          ((GtFR (I n) _) : s') -> R (s', mem, I (n>m))
+          ((EqFL _ e2) : s') -> E (((EqFR e Pending) : s'), mem, e2)
+          ((EqFR (I n) _) : s') -> R (s', mem, I (n==m))
+          ((AppFR (Fn x e1) _) : s') -> E (s', mem, subst e1 (x, e))
+          ((LetF x _ e2) : s') -> E (s', mem, subst e2 (x, e))
+          ((AllocF _) : s') -> 
+              let l = newAddress mem in 
+                case l of 
+                  (L i) -> R (s', (i, e):mem, l)
+                  _ -> P (s, mem, e)
+          ((AssignFR (L i) _):s') -> 
+            case update (i, e) mem of
+              Just mem' -> (s', mem', Void)
+              Nothing -> P (s, mem, e)
+          ((RaiseF _) : s') -> P (s, mem, e)
+          ((HandleF _ x e2) : s') -> R (s', mem, e)
+          ((ContinueFL _ e2) : s') -> E (((ContinueFR e Pending):s'), mem, e2)
+          ((ContinueFR (Cont s'') _) : s') -> R (s'', mem, e)
+          _ -> P (s, mem, e)
       (B q) ->
         case s of
-          ((FnF x _) : s') -> R (s', Fn x)
-          ((NotF _) : s') -> R (s', B (not n))
-          ((AndFL _ e2) : s') -> E ((AndFR e Pending : s'), e2)
-          ((AndFR (B p) _) : s') -> R (s', I (n&&m))
-          ((OrFL _ e2) : s') -> E ((OrFR e Pending : s'), e2)
-          ((OrFR (B p) _) : s') -> R (s', B (p || q))
-          ((IfFL _ e1 e2) : s') -> E (s', if q then e1 else e2)
-          ((LetFL x _ e2) : s') -> E (s', Sintax.subst e2 (x, e))
-          _ -> P (s, Error)
-      (Fn x e) ->
+          ((NotF _) : s') -> R (s', mem, B (not n))
+          ((FnF x _) : s') -> R (s', mem, Fn x e)
+          ((AndFL _ e2) : s') -> E ((AndFR e Pending : s'), mem, e2)
+          ((AndFR (B p) _) : s') -> R (s', mem, I (n&&m))
+          ((OrFL _ e2) : s') -> E ((OrFR e Pending : s'), mem, e2)
+          ((OrFR (B p) _) : s') -> R (s', mem, B (p || q))
+          ((AppFR (Fn x e1) _) : s') -> E (s', mem, subst e1 (x, e))
+          ((IfF _ e1 e2) : s') -> E (s', mem, if q then e1 else e2)
+          ((LetF x _ e2) : s') -> E (s', mem, Sintax.subst e2 (x, e))
+          ((AllocF _) : s') -> 
+            let l = newAddress mem in 
+              case l of 
+                (L i) -> R (s', (i, e):mem, l)
+                _ -> P (s, mem, e)
+          ((AssignFR (L i) _):s') -> 
+            case update (i, e) mem of
+              Just mem' -> R (s', mem', Void)
+              Nothing -> P (s, mem, e)
+          ((WhileF _ e2) : s') -> E (s', mem, if q then e2 else Void)
+          ((RaiseF _) : s') -> P (s, mem, e)
+          ((HandleF _ x e2) : s') -> R (s', mem, e)
+          ((ContinueFR (Cont s'') _) : s') -> R (s'', mem, e)
+          _ -> P (s, mem, e)
+      (L i) ->
         case s of
-          ((FnF x _) : s') -> R (s', Fn x)
+          ((FnF x _) : s') -> R (s', mem, Fn x e)
+          ((AppFR (Fn x e1) _) : s') -> E (s', mem, subst e1 (x, e))
+          ((LetF x _ e2) : s') -> E (s', mem, subst e2 (x, e))
+          ((AllocF _) : s') -> 
+            let l = newAddress mem in 
+              case l of 
+                (L i) -> R (s', (i, e):mem, l)
+                _ -> P (s, mem, e)
+          ((DerrefF _) : s') -> 
+            case access i mem of
+              Just v -> R (s', mem, v)
+              Nothing -> P (s, mem, e)
+          ((AssignFL _ e2) : s') -> E (((AssignFR e Pending) : s'), mem, e2)
+          ((AssignFR (L i) _):s') -> 
+            case update (i, e) mem of
+              Just mem' -> R (s', mem', Void)
+              Nothing -> P (s, mem, e)
+          ((RaiseF _) : s') -> P (s, mem, e)
+          ((HandleF _ x e2) : s') -> R (s', mem, e)
+          ((ContinueFR (Cont s'') _) : s') -> R (s'', mem, e)
+          _ -> P (s, mem, e)
+      (Void) ->
+        case s of 
+          ((FnF x _) : s') -> R (s', mem, Fn x e)
+          ((AppFR (Fn x e2) _) : s') -> E (s', mem, subst e2 (x, e))
+          ((LetF x _ e2) : s') -> E (s', mem, subst e2 (x, e))
+          ((AssignFR e1 _) : s') -> 
+            case update (i, e) mem of
+              Just mem' -> R (s', mem', Void)
+              Nothing -> P (s, mem, e)
+          ((SeqF _ e2) : s') -> E (s', mem, e2)
+          ((RaiseF _) : s') -> P (s, mem, e)
+          ((HandleF _ x e2) : s') -> R (s', mem, e)
+          ((ContinueFR (Cont s'') _) : s') -> R (s'', mem, e)
+          _ -> P (s, mem, e)
+      (Cont st) ->
+        case s of
+          ((FnF x _) : s') -> R (s', mem, Fn x e)
+          ((AppFR (Fn x e2) _) : s') -> E (s', mem, subst e2 (x, e))
+          ((LetF x _ e2) : s') -> E (s', mem, subst e2 (x, e))
+          ((AssignFR e1 _) : s') -> 
+            case update (i, e) mem of
+              Just mem' -> R (s', mem', Void)
+              Nothing -> P (s, mem, e)
+          ((RaiseF _) : s') -> P (s, mem, e)
+          ((HandleF _ x e2) : s') -> R (s', mem, e)
+          ((Continue FL _ e2):s') -> E (((ContinueFR e Pending):s'), mem, e2)
+          ((ContinueFR (Cont s'') _) : s') -> R (s'', mem, e)
+          _ -> P (s, mem, e)
+      (Fn x e1) ->
+        case s of
+          ((FnF x _) : s') -> R (s', Fn x e)
           ((App _ e2) : s') -> E (s', Sintax.subst e2 (x, e))
           ((LetFL x _ e2) : s') -> E (s', Sintax.subst e2 (x, e))
-          _ -> P (s, Error)
-  eval1 (P (s, m, e)) =
+          ((AssignFR e1 _) : s') -> 
+            case update (i, e) mem of
+              Just mem' -> R (s', mem', Void)
+              Nothing -> P (s, mem, e)
+          ((RaiseF _) : s') -> P (s, mem, e)
+          ((HandleF _ x e2) : s') -> R (s', mem, e)
+          ((ContinueFR (Cont s'') _) : s') -> R (s'', mem, e)
+          _ -> P (s, mem, e)
+      _ ->
+        case s of
+          ((FnF x _) : s') -> R (s', Fn x e)
+          ((HandleF _ x e2) : s') -> R (s', mem, e)
+          _ -> P (s, mem, e)
+  eval1 (P (s, mem, e)) =
     case s of
-      (HandleF _ x e1):s' -> E (s', m, Sintax.subst e1 (x, e))
-      (_:s') -> P (s', Error)
+      (HandleF _ x e1):s' -> E (s', mem, Sintax.subst e1 (x, e))
+      (_:s') -> P (s', mem, Error)
 
 
 

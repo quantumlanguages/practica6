@@ -35,6 +35,7 @@ module BAE.Sintax where
                 | Assig Expr Expr -- ^ Actualizar
                 | Seq Expr Expr -- ^ Secuencia de instrucciones
                 | While Expr Expr -- ^ Ciclo de control
+                | Void
                 | Raise Expr
                 | Handle Expr Identifier Expr
                 | Letcc Identifier Expr
