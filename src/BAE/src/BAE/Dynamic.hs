@@ -13,250 +13,282 @@ module BAE.Dynamic where
   import qualified BAE.Static as Static
   import qualified BAE.Type as Type
 
-  type Stack = [Frame]
-
-  data State = E (Stack, Memory, Expr) | R (Stack, Memory, Expr) 
-              | P (Stack, Memory, Expr)
+  data State = E (Memory, Stack, Expr) | R (Memory, Stack, Expr) 
+              | P (Memory, Stack, Expr)
+              deriving (Show)
 
   eval1 :: State -> State
-  eval1 (E (s, m, e)) = case e of
+  eval1 (E (m, s, e)) = case e of
                       -- valores
-                      (V _) -> R (s, m, e)
-                      (B _) -> R (s, m, e)
-                      (I _) -> R (s, m, e)
-                      (L _) -> R (s, m, e)
-                      (Void) -> R(s, m, e)
-                      (Cont _) -> R (s, m, e)
-                      (Error) -> R (s, m, e)
+                      (V _) -> R (m, s, e)
+                      (B _) -> R (m, s, e)
+                      (I _) -> R (m, s, e)
+                      (L _) -> R (m, s, e)
+                      (Void) -> R (m, s, e)
+                      (Cont _) -> R (m, s, e)
                       -- operadores unitarios
-                      (Fn x e1) -> E (((FnF x Pending):s), m, e1)
-                      (Fix x e1) -> E (s, m, subst e (x, Fix x e1))
-                      (Succ e1) -> E ((SuccF Pending):s, m, e1)
-                      (Pred e1) -> E ((PredF Pending):s, m, e1)
-                      (Not e1) -> E ((NotF Pending):s, m, e1)
-                      (Alloc e1) -> E ((AllocF Pending):s, m, e1)
-                      (Deref e1) -> E ((DerefF Pending):s, m, e1)
-                      (Raise e1) -> E ((RaiseF Pending):s, m, e1)
+                      (Fn x e1) -> E (m, ((FnF x ()):s), e1)
+                      (Fix x e1) -> E (m, s, subst e (x, Fix x e1))
+                      (Succ e1) -> E (m, (SuccF ()):s, e1)
+                      (Pred e1) -> E (m, (PredF ()):s, e1)
+                      (Not e1) -> E (m, (NotF ()):s, e1)
+                      (Alloc e1) -> E (m, (AllocF ()):s, e1)
+                      (Deref e1) -> E (m, (DerefF ()):s, e1)
+                      (Raise e1) -> E (m, (RaiseF ()):s, e1)
                       -- operadores binarios
-                      (Add e1 e2) ->
-                        case e1 of
-                          (I n) -> E ((AddFR (I n) Pending):s, m, e2)
-                          _ -> E ((AddFL Pending (e2)):s, m, e1)
-                      (Mul e1 e2) ->
-                        case e1 of
-                          (I n) -> E ((MulFR (I n) Pending):s, m, e2)
-                          _ -> E ((MulFL Pending (e2)):s, m, e1)
-                      (And e1 e2) ->
-                        case e1 of
-                          (B p) -> E ((AndFR (B p) Pending):s, m, e2)
-                          _ -> E ((AndFL Pending (e2)):s, m, e1)
-                      (Or e1 e2) ->
-                        case e1 of
-                          (B p) -> E ((OrFR (B p) Pending):s, m, e2)
-                          _ -> E ((OrFL Pending (e2)):s, m, e1)
-                      (Lt e1 e2) ->
-                        case e1 of
-                          (I n) -> E ((LtFR (I n) Pending):s, m, e2)
-                          _ -> E ((LtFL Pending (e2)):s, m, e1)
-                      (Gt e1 e2) ->
-                        case e1 of
-                          (I n) -> E ((GtFR (I n) Pending):s, m, e2)
-                          _ -> E ((GtFL Pending (e2)):s, m, e1)
-                      (Eq e1 e2) ->
-                        case e1 of
-                          (I n) -> E ((EqFR (I n) Pending):s, m, e2)
-                          _ -> E ((EqFL Pending (e2)):s, m, e1)
-                      (App e1 e2) ->
-                        case e1 of
-                          (Fn x e3) -> E ((AppFR (Fn x e3) Pending):s, m, e2)
-                          _ -> E ((EqFL Pending (e2)):s, m, e1)
-                      (Assign e1 e2) ->
-                        case e1 of
-                          (L n) -> E ((AssignFR (L n) Pending):s, m, e2)
-                          _ -> E ((AssignFL Pending (e2)):s, m, e1)
-                      (Seq e1 e2) -> E ((SeqF Pending e2):s, m, e1)
-                      (While e1 e2) -> E ((WhileF Pending e2):s, m, e1)
-                      (Raise e1) -> E ((RaiseF Pending):s, m, e1)
-                      (Continue e1 e2) ->
-                        case e1 of
-                          (Cont st)-> E ((ContinueFR (Cont st) Pending):s, m,e2)
-                          _ -> E ((ContinueFL Pending (e2)):s, m, e1)
-                      (Handle e1 i e2) -> E ((HandleF Pending i e2):s, m, e1)
+                      (Add e1 e2) -> E (m, (AddFL () e2):s, e1)
+                      (Mul e1 e2) -> E (m, (MulFL () e2):s, e1)
+                      (And e1 e2) -> E (m, (AndFL () e2):s, e1)
+                      (Or e1 e2) -> E (m, (OrFL () e2):s, e1)
+                      (Lt e1 e2) -> E (m, (LtFL () e2):s, e1)
+                      (Gt e1 e2) -> E (m, (GtFL () e2):s, e1)
+                      (Eq e1 e2) -> E (m, (EqFL () e2):s, e1)
+                      (App e1 e2) -> E (m, (EqFL () e2):s, e1)
+                      (Assig e1 e2) -> E (m, (AssigFL () e2):s, e1)
+                      (Seq e1 e2) -> E (m, (SeqF () e2):s, e1)
+                      (While e1 e2) -> E (m, (WhileF () e2):s, e1)
+                      (Continue e1 e2) -> E (m, (ContinueFL () e2):s, e1)
+                      (Handle e1 i e2) -> E (m, (HandleF () i e2):s, e1)
                       --ternarias
-                      (If e1 e2 e3) -> E ((IfF Pending e2 e3):s, m, e1)
-                      (Let x e1 e2) -> E ((LetF x Pending e2):s, m, e1)
-                      (Letcc i e1) -> E (s, m, subst e1 (x, Cont s))
-                      _ -> P (s, m, e)
-  eval1 (R (s, mem, e)) =
+                      (If e1 e2 e3) -> E (m, (IfF () e2 e3):s, e1)
+                      (Let x e1 e2) -> E (m, (LetF x () e2):s, e1)
+                      (Letcc x e1) -> E (m, s, subst e1 (x, Cont s))
+                      _ -> P (m, s, e)
+  eval1 (R (mem, s, e)) =
     case e of
       (V y) ->
         case s of
-          ((FnF x _) : s') -> R (s', mem, Fn x e)
-          ((LetFL x _ e2) : s') -> E (s', mem, subst e2 (x, e))
-          _ -> P (s, mem, e)
+          ((FnF x _) : s') -> R (mem, s', Fn x e)
+          ((LetF x _ e2) : s') -> E (mem, s', subst e2 (x, e))
+          _ -> P (mem, s, Raise e)
       (I m) ->
         case s of
-          ((SuccF _) : s') -> R (s', mem, I (succ m))
-          ((PredF _) : s') -> R (s', mem, I (pred m))
-          ((FnF x _) : s') -> R (s', mem, Fn x e)
-          ((AddFL _ e2) : s') -> E (((AddFR e Pending) : s'), mem, e2)
-          ((AddFR (I n) _) : s') -> R (s', mem, I (n+m))
-          ((MulFL _ e2) : s') -> E (((MulFR e Pending) : s'), mem, e2)
-          ((MulFR (I n) _) : s') -> R (s', mem, I (n*m))
-          ((LtFL _ e2) : s') -> E (((LtFR e Pending) : s'), mem, e2)
-          ((LtFR (I n) _) : s') -> R (s', mem, I (n<m))
-          ((GtFL _ e2) : s') -> E (((GtFR e Pending) : s'), mem, e2)
-          ((GtFR (I n) _) : s') -> R (s', mem, I (n>m))
-          ((EqFL _ e2) : s') -> E (((EqFR e Pending) : s'), mem, e2)
-          ((EqFR (I n) _) : s') -> R (s', mem, I (n==m))
-          ((AppFR (Fn x e1) _) : s') -> E (s', mem, subst e1 (x, e))
-          ((LetF x _ e2) : s') -> E (s', mem, subst e2 (x, e))
+          ((SuccF _) : s') -> R (mem, s', I (succ m))
+          ((PredF _) : s') -> R (mem, s', I (pred m))
+          ((FnF x _) : s') -> R (mem, s', Fn x e)
+          ((AddFL _ e2) : s') -> E (mem, ((AddFR e ()) : s'), e2)
+          ((AddFR (I n) _) : s') -> R (mem, s', I (n+m))
+          ((MulFL _ e2) : s') -> E (mem, ((MulFR e ()) : s'), e2)
+          ((MulFR (I n) _) : s') -> R (mem, s', I (n*m))
+          ((LtFL _ e2) : s') -> E (mem, ((LtFR e ()) : s'), e2)
+          ((LtFR (I n) _) : s') -> R (mem, s', B (n<m))
+          ((GtFL _ e2) : s') -> E (mem, ((GtFR e ()) : s'), e2)
+          ((GtFR (I n) _) : s') -> R (mem, s', B (n>m))
+          ((EqFL _ e2) : s') -> E (mem, ((EqFR e ()) : s'), e2)
+          ((EqFR (I n) _) : s') -> R (mem, s', B (n==m))
+          ((AppFR (Fn x e1) _) : s') -> E (mem, s', subst e1 (x, e))
+          ((LetF x _ e2) : s') -> E (mem, s', subst e2 (x, e))
           ((AllocF _) : s') -> 
               let l = newAddress mem in 
                 case l of 
-                  (L i) -> R (s', (i, e):mem, l)
-                  _ -> P (s, mem, e)
-          ((AssignFR (L i) _):s') -> 
+                  (L i) -> R ((i, e):mem, s', l)
+                  _ -> P (mem, s, Raise e)
+          ((AssigFR (L i) _):s') -> 
             case update (i, e) mem of
-              Just mem' -> (s', mem', Void)
-              Nothing -> P (s, mem, e)
-          ((RaiseF _) : s') -> P (s, mem, e)
-          ((HandleF _ x e2) : s') -> R (s', mem, e)
-          ((ContinueFL _ e2) : s') -> E (((ContinueFR e Pending):s'), mem, e2)
-          ((ContinueFR (Cont s'') _) : s') -> R (s'', mem, e)
-          _ -> P (s, mem, e)
+              Just mem' -> R (mem', s', Void)
+              Nothing -> P (mem, s, Raise e)
+          ((RaiseF _) : s') -> P (mem, s, Raise e)
+          ((HandleF _ x e2) : s') -> R (mem, s', e)
+          ((ContinueFL _ e2) : s') -> E (mem, ((ContinueFR e ()):s'), e2)
+          ((ContinueFR (Cont s'') _) : s') -> R (mem, s'', e)
+          _ -> P (mem, s, Raise e)
       (B q) ->
         case s of
-          ((NotF _) : s') -> R (s', mem, B (not n))
-          ((FnF x _) : s') -> R (s', mem, Fn x e)
-          ((AndFL _ e2) : s') -> E ((AndFR e Pending : s'), mem, e2)
-          ((AndFR (B p) _) : s') -> R (s', mem, I (n&&m))
-          ((OrFL _ e2) : s') -> E ((OrFR e Pending : s'), mem, e2)
-          ((OrFR (B p) _) : s') -> R (s', mem, B (p || q))
-          ((AppFR (Fn x e1) _) : s') -> E (s', mem, subst e1 (x, e))
-          ((IfF _ e1 e2) : s') -> E (s', mem, if q then e1 else e2)
-          ((LetF x _ e2) : s') -> E (s', mem, Sintax.subst e2 (x, e))
+          ((NotF _) : s') -> R (mem, s', B (not q))
+          ((FnF x _) : s') -> R (mem, s', Fn x e)
+          ((AndFL _ e2) : s') -> E (mem, (AndFR e () : s'), e2)
+          ((AndFR (B p) _) : s') -> R (mem, s', B (p&&q))
+          ((OrFL _ e2) : s') -> E (mem, (OrFR e () : s'), e2)
+          ((OrFR (B p) _) : s') -> R (mem, s', B (p || q))
+          ((AppFR (Fn x e1) _) : s') -> E (mem, s', subst e1 (x, e))
+          ((IfF _ e1 e2) : s') -> E (mem, s', if q then e1 else e2)
+          ((LetF x _ e2) : s') -> E (mem, s', subst e2 (x, e))
           ((AllocF _) : s') -> 
             let l = newAddress mem in 
               case l of 
-                (L i) -> R (s', (i, e):mem, l)
-                _ -> P (s, mem, e)
-          ((AssignFR (L i) _):s') -> 
+                (L i) -> R ((i, e):mem, s', l)
+                _ -> P (mem, s, Raise e)
+          ((AssigFR (L i) _):s') -> 
             case update (i, e) mem of
-              Just mem' -> R (s', mem', Void)
-              Nothing -> P (s, mem, e)
-          ((WhileF _ e2) : s') -> E (s', mem, if q then e2 else Void)
-          ((RaiseF _) : s') -> P (s, mem, e)
-          ((HandleF _ x e2) : s') -> R (s', mem, e)
-          ((ContinueFR (Cont s'') _) : s') -> R (s'', mem, e)
-          _ -> P (s, mem, e)
+              Just mem' -> R (mem', s', Void)
+              Nothing -> P (mem, s, Raise e)
+          ((WhileF _ e2) : s') -> E (mem, s', if q then e2 else Void)
+          ((RaiseF _) : s') -> P (mem, s, Raise e)
+          ((HandleF _ x e2) : s') -> R (mem, s', e)
+          ((ContinueFR (Cont s'') _) : s') -> R (mem, s'', e)
+          _ -> P (mem, s, Raise e)
       (L i) ->
         case s of
-          ((FnF x _) : s') -> R (s', mem, Fn x e)
-          ((AppFR (Fn x e1) _) : s') -> E (s', mem, subst e1 (x, e))
-          ((LetF x _ e2) : s') -> E (s', mem, subst e2 (x, e))
+          ((FnF x _) : s') -> R (mem, s', Fn x e)
+          ((AppFR (Fn x e1) _) : s') -> E (mem, s', subst e1 (x, e))
+          ((LetF x _ e2) : s') -> E (mem, s', subst e2 (x, e))
           ((AllocF _) : s') -> 
             let l = newAddress mem in 
               case l of 
-                (L i) -> R (s', (i, e):mem, l)
-                _ -> P (s, mem, e)
-          ((DerrefF _) : s') -> 
+                (L i) -> R ((i, e):mem, s', l)
+                _ -> P (mem, s, Raise e)
+          ((DerefF _) : s') -> 
             case access i mem of
-              Just v -> R (s', mem, v)
-              Nothing -> P (s, mem, e)
-          ((AssignFL _ e2) : s') -> E (((AssignFR e Pending) : s'), mem, e2)
-          ((AssignFR (L i) _):s') -> 
+              Just v -> R (mem, s', v)
+              Nothing -> P (mem, s, Raise e)
+          ((AssigFL _ e2) : s') -> E (mem, ((AssigFR e ()) : s'), e2)
+          ((AssigFR (L i) _):s') -> 
             case update (i, e) mem of
-              Just mem' -> R (s', mem', Void)
-              Nothing -> P (s, mem, e)
-          ((RaiseF _) : s') -> P (s, mem, e)
-          ((HandleF _ x e2) : s') -> R (s', mem, e)
-          ((ContinueFR (Cont s'') _) : s') -> R (s'', mem, e)
-          _ -> P (s, mem, e)
+              Just mem' -> R (mem', s', Void)
+              Nothing -> P (mem, s, Raise e)
+          ((RaiseF _) : s') -> P (mem, s, Raise e)
+          ((HandleF _ x e2) : s') -> R (mem, s', e)
+          ((ContinueFR (Cont s'') _) : s') -> R (mem, s'', e)
+          _ -> P (mem, s, Raise e)
       (Void) ->
         case s of 
-          ((FnF x _) : s') -> R (s', mem, Fn x e)
-          ((AppFR (Fn x e2) _) : s') -> E (s', mem, subst e2 (x, e))
-          ((LetF x _ e2) : s') -> E (s', mem, subst e2 (x, e))
-          ((AssignFR e1 _) : s') -> 
+          ((FnF x _) : s') -> R (mem, s', Fn x e)
+          ((AppFR (Fn x e2) _) : s') -> E (mem, s', subst e2 (x, e))
+          ((LetF x _ e2) : s') -> E (mem, s', subst e2 (x, e))
+          ((AssigFR (L i) _) : s') -> 
             case update (i, e) mem of
-              Just mem' -> R (s', mem', Void)
-              Nothing -> P (s, mem, e)
-          ((SeqF _ e2) : s') -> E (s', mem, e2)
-          ((RaiseF _) : s') -> P (s, mem, e)
-          ((HandleF _ x e2) : s') -> R (s', mem, e)
-          ((ContinueFR (Cont s'') _) : s') -> R (s'', mem, e)
-          _ -> P (s, mem, e)
+              Just mem' -> R (mem', s', Void)
+              Nothing -> P (mem, s, Raise e)
+          ((SeqF _ e2) : s') -> E (mem, s', e2)
+          ((RaiseF _) : s') -> P (mem, s, Raise e)
+          ((HandleF _ x e2) : s') -> R (mem, s', e)
+          ((ContinueFR (Cont s'') _) : s') -> R (mem, s'', e)
+          _ -> P (mem, s, Raise e)
       (Cont st) ->
         case s of
-          ((FnF x _) : s') -> R (s', mem, Fn x e)
-          ((AppFR (Fn x e2) _) : s') -> E (s', mem, subst e2 (x, e))
-          ((LetF x _ e2) : s') -> E (s', mem, subst e2 (x, e))
+          ((FnF x _) : s') -> R (mem, s', Fn x e)
+          ((AppFR (Fn x e2) _) : s') -> E (mem, s', subst e2 (x, e))
+          ((LetF x _ e2) : s') -> E (mem, s', subst e2 (x, e))
           ((AllocF _) : s') -> 
             let l = newAddress mem in 
               case l of 
-                (L i) -> R (s', (i, e):mem, l)
-                _ -> P (s, mem, e)
-          ((AssignFR e1 _) : s') -> 
+                (L i) -> R ((i, e):mem, s', l)
+                _ -> P (mem, s, Raise e)
+          ((AssigFR (L i) _) : s') -> 
             case update (i, e) mem of
-              Just mem' -> R (s', mem', Void)
-              Nothing -> P (s, mem, e)
-          ((RaiseF _) : s') -> P (s, mem, e)
-          ((HandleF _ x e2) : s') -> R (s', mem, e)
-          ((Continue FL _ e2):s') -> E (((ContinueFR e Pending):s'), mem, e2)
-          ((ContinueFR (Cont s'') _) : s') -> R (s'', mem, e)
-          _ -> P (s, mem, e)
+              Just mem' -> R (mem', s', Void)
+              Nothing -> P (mem, s, Raise e)
+          ((RaiseF _) : s') -> P (mem, s, Raise e)
+          ((HandleF _ x e2) : s') -> R (mem, s', e)
+          ((ContinueFL _ e2):s') -> E (mem, ((ContinueFR e ()):s'), e2)
+          ((ContinueFR (Cont s'') _) : s') -> R (mem, s'', e)
+          _ -> P (mem, s, Raise e)
       (Fn x e1) ->
         case s of
-          ((FnF x _) : s') -> R (s', Fn x e)
-          ((App _ e2) : s') -> E (s', Sintax.subst e2 (x, e))
-          ((LetFL x _ e2) : s') -> E (s', Sintax.subst e2 (x, e))
+          ((FnF _ _) : s') -> R (mem, s', Fn x e)
+          ((AppFL _ e2) : s') -> E (mem, ((AppFR e ()):s'), e2)
+          ((AppFR (Fn x e2) _) : s') -> E (mem, s', subst e2 (x, e))
+          ((LetF x _ e2) : s') -> E (mem, s', subst e2 (x, e))
           ((AllocF _) : s') -> 
             let l = newAddress mem in 
               case l of 
-                (L i) -> R (s', (i, e):mem, l)
-                _ -> P (s, mem, e)
-          ((AssignFR e1 _) : s') -> 
+                (L i) -> R ((i, e):mem, s', l)
+                _ -> P (mem, s, Raise e)
+          ((AssigFR (L i) _) : s') -> 
             case update (i, e) mem of
-              Just mem' -> R (s', mem', Void)
-              Nothing -> P (s, mem, e)
-          ((RaiseF _) : s') -> P (s, mem, e)
-          ((HandleF _ x e2) : s') -> R (s', mem, e)
-          ((ContinueFR (Cont s'') _) : s') -> R (s'', mem, e)
-          _ -> P (s, mem, e)
+              Just mem' -> R (mem', s', Void)
+              Nothing -> P (mem, s, Raise e)
+          ((RaiseF _) : s') -> P (mem, s, Raise e)
+          ((HandleF _ x e2) : s') -> R (mem, s', e)
+          ((ContinueFR (Cont s'') _) : s') -> R (mem, s'', e)
+          _ -> P (mem, s, Raise e)
       _ ->
         case s of
-          ((FnF x _) : s') -> R (s', Fn x e)
-          ((HandleF _ x e2) : s') -> R (s', mem, e)
-          _ -> P (s, mem, e)
-  eval1 (P (s, mem, e)) =
+          ((FnF x _) : s') -> R (mem, s', Fn x e)
+          ((HandleF _ x e2) : s') -> R (mem, s', e)
+          _ -> P (mem, s, Error)
+  eval1 (P (mem, s, e)) =
     case s of
-      (HandleF _ x e1):s' -> E (s', mem, Sintax.subst e1 (x, e))
-      (_:s') -> P (s', mem, Error)
+      (HandleF _ x e1):s' ->
+        case e of 
+          (Raise e1) -> E (mem, s', subst e1 (x, e1))
+          _ -> P (mem, s, Raise e)
+      (_:s') -> P (mem, s', e)
 
 
-  evale :: State -> State
-  evale s@(E (st, mem, e)) = 
-    case st of
-      [] -> s
-      _ -> evale (eval1 s)
-  evale s@(R (st, mem, e)) = 
-    case st of
-      [] -> s
-      _ -> evale (eval1 s)
-  evale s@(P (st, mem, e)) = 
-    case st of
-      [] -> s
-      _ -> evale (eval1 s)
+  evals :: State -> State
+  evals s = 
+    case eval1 s of
+      s'@(E (_, [], e')) -> if blocked e' then s' else evals s'
+      s'@(E (_, _, e')) -> evals s'
+      s'@(R (_, [], e')) -> if blocked e' then s' else evals s'
+      s'@(R (_, _, e')) -> evals s'
+      s'@(P (_, [], e')) -> if blocked e' then s' else evals s'
+      s'@(P (_, _, e')) -> evals s'
 
   eval :: Expr -> Expr
   eval e = 
-    case evale (E ([], [], e)) of
-      R ([], mem, e') -> 
+    case evals (E ([], [], e)) of
+      R (_, [], e') -> 
         case e' of
           B _ -> e'
-          I _ - e'
+          I _ -> e'
           _ -> error "invalid final value"
+      _ -> error "no value was returned"
+
+  blocked :: Expr -> Bool
+  blocked expr =
+    case expr of
+      I n -> True
+      B p -> True
+      V x -> True
+      L i -> True
+      Void -> True
+      Add (I _) (I _) -> False
+      Add (I _) e -> blocked e
+      Add e1 e2 -> blocked e1
+      Mul (I _) (I _) -> False
+      Mul (I _) e -> blocked e
+      Mul e1 e2 -> blocked e1
+      Succ (I _) -> False
+      Succ e -> blocked e
+      Pred (I 0) -> False
+      Pred (I n) -> False
+      Pred e -> blocked e
+      Not (B p) -> False
+      Not e -> blocked e
+      And (B p) (B q) -> False
+      And (B p) e -> blocked e
+      And e1 e2 -> blocked e1
+      Or (B p) (B q) -> False
+      Or (B p) e -> blocked e
+      Or e1 e2 -> blocked e1
+      Lt (I n) (I m) -> False
+      Lt (I n) e -> blocked e
+      Lt e1 e2 -> blocked e1
+      Gt (I n) (I m) -> False
+      Gt (I n) e -> blocked e
+      Gt e1 e2 -> blocked e1
+      Eq (I n) (I m) -> False
+      Eq (I n) e -> blocked e
+      Eq e1 e2 -> blocked e1
+      If (B q) e1 e2 -> False
+      If e1 e2 e3 -> blocked e1
+      Let i e1 e2 -> False
+      Fn i e1 -> True
+      Fix _ _ -> False
+      App e1 e2 ->
+          if blocked e1
+          then
+              if blocked e2
+              then case e1 of
+                  Fn _ _ -> False
+                  _ -> True
+              else False
+          else False
+      Alloc e -> False
+      Deref e -> False
+      Assig e1 e2 -> False
+      Seq Void e2 -> False
+      Seq e1 e2 -> blocked e1
+      While e1 e2 -> False
+      Raise e1 -> blocked e1
+      Handle e1 x e2 -> False
+      Letcc x e -> False
+      Continue e1 e2 -> False
+      Cont s -> True
+      Error -> True
+
 
 {--
 -- Antiguo eval1
