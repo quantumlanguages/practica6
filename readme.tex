@@ -1,0 +1,136 @@
+% type
+\documentclass{article}
+
+% format
+\usepackage[letterpaper, margin=1.5cm]{geometry}
+
+% font
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{sectsty}
+\allsectionsfont{\color{DarkOrchid}}
+
+% language
+\usepackage[spanish]{babel}
+
+% math symbols
+\usepackage{amssymb}
+
+% macros
+\newcommand{\tx}[1]{\texttt{#1}}
+
+% code
+\usepackage{minted}
+
+% header
+
+\title {
+    Práctica 6\\
+    Excepciones y Continuaciones en la Máquina $\mathcal{K}$
+}
+
+\author {
+    Sandra del Mar Soto Corderi \quad Edgar Quiroz Castañeda
+}
+
+% document
+\begin{document}
+    \maketitle
+
+    \section{La Maquina $\mathcal{K}$}
+
+    \subsection{Marcos}
+
+    Para modelar la máquina abstracta $\mathcal{K}$, en necesario tener una 
+    estrucutra que guarde los cómputos pendientes, llamados marcos. Hay un marco
+    por cada posible cómputo pendiente de algún operador.
+
+    \begin{minted}{haskell}
+    -- | Tipo de marcos vacíos
+    type Pending = ()
+
+    -- | Tipo de marco
+    data Frame = SuccF Pending
+               | PredF Pending
+               | ...
+               | RaiseF Pending
+               | HandleF Pending Identifier Expr
+               | ContinueFL Pending Expr
+               | ContinueFR Expr Pending
+               deriving (Eq)
+    \end{minted}
+
+    \begin{itemize}
+        \item \tx{instance Show Frame}
+
+        Sólo se tomó un el inicio del nombre del operador correspondiente, 
+        remplazando el cómputo pendiente con un guión \tx{-}.
+
+        \begin{minted}{haskell}
+        -- | Show para marcos
+        instance Show Frame where
+            show ex =
+            case ex of
+                (SuccF _) -> "suc(-)"
+                (PredF _) -> "pred(-)"
+                ...
+                (RaiseF _) -> "raise(-)"
+                (HandleF _, x, e2) -> "handle(-, " ++ (show x) ++ ", " ++ (show e2) ++ ")"
+                (ContinueFL _ e) -> "continue(-, " ++ (show e) ++ ")"
+                (ContinueFR e _) -> "continue(" ++ (show e) ++ ", -)"
+        \end{minted}
+    \end{itemize}
+
+    \subsection{Estados}
+
+    Ahora que hay que tener un registro de los cómputos pendientes, los estados
+    al momento de evaluar expresiones cambian.
+
+    Hay tres posibles estados: evaluando, terminando, y error.
+
+    \begin{minted}{haskell}
+        -- | Tipo para estados
+        data State = E (Memory, Stack, Expr) | R (Memory, Stack, Expr) 
+              | P (Memory, Stack, Expr)
+    \end{minted}
+
+    \begin{itemize}
+        \item \tx{instance Show State}
+
+        En los ejemplos en la descripción de la práctica, los estados se
+        mostraban directamente como están definidos.
+
+        Así que para mantener este formato de manera sencilla, sólo se agregó 
+        que los estados derivaran su instancia de \tx{Show} de su definición.
+
+        \begin{minted}{haskell}
+            -- | Tipo para estados
+            data State = E (Memory, Stack, Expr) | R (Memory, Stack, Expr) 
+              | P (Memory, Stack, Expr)
+              deriving (Show)
+        \end{minted}
+
+
+
+    \end{itemize}
+
+    \section{Excepciones y Continuaciones}
+
+    \begin{itemize}
+        \item \tx{eval1}
+        \item\tx{evals}
+        \item \tx{eval}
+    \end{itemize}
+
+    \section{Integración}
+
+    \begin{itemize}
+        \item \tx{frVars}
+        \item \tx{subst}
+        \item \tx{alphaEq}
+    \end{itemize}
+
+    \section*{Dificultades}
+\end{document}
+
+
