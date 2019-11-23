@@ -13,6 +13,8 @@ module BAE.Dynamic where
   import qualified BAE.Static as Static
   import qualified BAE.Type as Type
 
+
+  -- | Tipo para estados
   data State = E (Memory, Stack, Expr) | R (Memory, Stack, Expr) 
               | P (Memory, Stack, Expr)
               deriving (Show)

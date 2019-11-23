@@ -82,10 +82,10 @@ module BAE.Sintax where
             (Cont s) -> "cont(" ++ (show s) ++ ")"
             (Error) -> "error"
 
-    -- Tipo de marcos vacíos
+    -- | Tipo de marcos vacíos
     type Pending = ()
 
-    -- Tipo de marco
+    -- | Tipo de marco
     data Frame = SuccF Pending
                | PredF Pending
                | NotF Pending
@@ -118,10 +118,10 @@ module BAE.Sintax where
                | HandleF Pending Identifier Expr
                | ContinueFL Pending Expr
                | ContinueFR Expr Pending
-               deriving (Eq, Show)
+               deriving (Eq)
 
     -- Show para marcos
-    instance Show Expr where
+    instance Show Frame where
         show ex =
           case ex of
             (SuccF _) -> "suc(-)"
@@ -153,7 +153,7 @@ module BAE.Sintax where
             (SeqF _ e) -> "seq(-, " ++ (show e) ++ ")"
             (WhileF _ e) -> "while(-, " ++ (show e) ++ ")"
             (RaiseF _) -> "raise(-)"
-            (HandleF _, x, e2) -> "handle(-, " ++ (show x) ++ "- , " ++ (show e2) ++ ")"
+            (HandleF _, x, e2) -> "handle(-, " ++ (show x) ++ ", " ++ (show e2) ++ ")"
             (ContinueFL _ e) -> "continue(-, " ++ (show e) ++ ")"
             (ContinueFR e _) -> "continue(" ++ (show e) ++ ", -)"
   
