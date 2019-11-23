@@ -265,4 +265,5 @@ module BAE.Sintax where
         (alphaEq e1c e2c) && (alphaEq e11 e21) && (alphaEq e12 e22)
     alphaEq (Let x e11 e12) (Let y e21 e22) =
         (alphaEq e11 e21) && (alphaEq e12 (subst e22 (y, V x)))
+    alphaEq (Cont e1) (Cont e2) = e1 == e2
     alphaEq _ _ = False
