@@ -3,7 +3,7 @@
 
 % format
 \usepackage[letterpaper, margin=1.5cm]{geometry}
-
+\usepackage[utf8]{inputenc}
 % font
 \renewcommand{\familydefault}{\sfdefault}
 \usepackage[dvipsnames]{xcolor}
@@ -126,11 +126,65 @@
 
     \begin{itemize}
         \item \tx{frVars}
+        \begin{minted}{haskell}
+-- | Obteniendo variables libres de una expresion(AddFL _ e) -> "add(-, " ++ (show e) ++ ")"
+frVars :: Expr -> [Identifier]
+frVars ex =
+	case ex of
+		...
+		(Void) -> []
+		(Seq e f) -> union (frVars e) (frVars f)
+		(While e f) -> union (frVars e) (frVars f)
+		(Raise e) -> frVars e
+		(Handle e i f) -> union (frVars e) ((frVars f) \\ [i])
+		(LetCC i e) -> (frVars e) \\ [i]
+		(Continue e f) -> union (frVars e) (frVars f)
+		(Cont s) -> []
+        \end{minted}
+        
+        
         \item \tx{subst}
+        \begin{minted}{haskell}
+    -- | Aplicando substitucion si es semanticamente posible
+subst :: Expr -> Substitution -> Expr
+subst ex s@(y, e') =
+	case ex of
+		...
+		(Seq e f) -> Seq (st e) (st f)
+		(While e f) -> While (st e) (st f)
+		(Raise e) -> Raise (st e)
+		(Handle e x f) ->
+			if x == y || elem x (frVars e')
+				then st (alphaExpr ex)
+			else Handle e x (st f)
+		(LetCC x e) ->
+			if x == y || elem x (frVars e')
+				then st (alphaExpr ex)
+			else LetCC x (st e)
+		(Continue e f) -> Continue (st e) (st f)
+		(Cont a) -> Cont a
+		where st = (flip subst) s
+        \end{minted}
+        
         \item \tx{alphaEq}
+        \begin{minted}{haskell}
+-- | Dice si dos expresiones son alpha equivalentes
+alphaEq :: Expr -> Expr -> Bool
+...
+alphaEq (Seq e1 e2) (Seq f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
+alphaEq (While e1 e2) (While f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
+alphaEq (Raise e) (Raise f) = alphaEq e f
+alphaEq (Handle e1 x e2) (Handle f1 y f2) = (alphaEq e1 f1) && (alphaEq e2 (subst f2 (y, (V x))))
+alphaEq (LetCC x e) (LetCC y f) = (alphaEq e (subst f (y, (V x))))
+alphaEq (Continue e1 e2) (Continue f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
+alphaEq (Cont s1) (Cont s2) = s1 == s2
+alphaEq _ _ = False
+        \end{minted}
     \end{itemize}
 
     \section*{Dificultades}
+    Nos fue difícil la implementación del eval1 ya que algunas definiciones nos causaban confusión y la longitud del código era bastante larga, por lo que era fácil que hubieran errores en el código.Igual fue complicado manejar los casos que manipulaban las continuaciones y la memoria a la vez.
+    
 \end{document}
 
 

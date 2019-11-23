@@ -17,8 +17,6 @@ module BAE.Sintax where
     -- | Renombrando String a Identificador para usar texto como el nombre de las variables.
     type Identifier = String
 
-    type Stack = [Frame]
-
     -- | Definiendo las expresiones del lenguaje, igual que antes pero ahora con
     -- variables
     data Expr = V Identifier | I Int | B Bool -- ^ Expresiones basicas
@@ -35,15 +33,14 @@ module BAE.Sintax where
                 | Alloc Expr -- ^ Guardar en memoria
                 | Deref Expr -- ^ Borrar de memeoria
                 | Assig Expr Expr -- ^ Actualizar
+                | Void
                 | Seq Expr Expr -- ^ Secuencia de instrucciones
                 | While Expr Expr -- ^ Ciclo de control
-                | Void
                 | Raise Expr
                 | Handle Expr Identifier Expr
-                | Letcc Identifier Expr
+                | LetCC Identifier Expr
                 | Continue Expr Expr
                 | Cont Stack
-                | Error
                 deriving (Eq)
 
     -- | Implementando la clase Show para hacer la representación más estética
@@ -63,8 +60,7 @@ module BAE.Sintax where
             (Lt e1 e2) -> "lt("++ (show e1) ++ " , " ++ (show e2) ++ ")"
             (Gt e1 e2) -> "gt("++ (show e1) ++ " , " ++ (show e2) ++ ")"
             (Eq e1 e2) -> "eq("++ (show e1) ++ " , " ++ (show e2) ++ ")"
-            (If ec e1 e2) -> "if("++ (show ec) ++ " , " ++ (show e1) ++ " , "
-                           ++ (show e2) ++ ")"
+            (If ec e1 e2) -> "if("++ (show ec) ++ " , " ++ (show e1) ++ " , " ++ (show e2) ++ ")"
             (Let x e1 e2) -> "let(" ++ (show e1) ++ " , " ++ (show x) ++ "." ++ (show e2) ++ ")"
             (Fn x e1) -> "fn(" ++ x ++ "." ++ (show e1) ++ ")"
             (App e1 e2) -> "app(" ++ (show e1) ++ ", " ++ (show e2) ++ ")"
@@ -75,17 +71,13 @@ module BAE.Sintax where
             (Void) -> "void"
             (Seq e1 e2) -> (show e1) ++ " ; " ++ (show e2)
             (While e1 e2) -> "while(" ++ (show e1) ++ ") do " ++ (show e2) ++ " end"
-            (Raise e1) -> "raise(" ++ (show e1) ++ ")"
-            (Handle e1 x e2) -> "handle " ++ (show e1) ++ "{"++ (show x) ++" => e2}"
-            (Letcc x e1) -> "letcc(" ++ (show x) ++ "." ++ (show e1) ++ ")"
-            (Continue e1 e2) -> "cont(" ++ (show e1) ++ (show e2) ++ ")"
-            (Cont s) -> "cont(" ++ (show s) ++ ")"
-            (Error) -> "error"
+            (Raise e) -> "raise(" ++ (show e) ++ ")"
 
-    -- | Tipo de marcos vacíos
+    -- Tipo de marcos vacíos
     type Pending = ()
 
-    -- | Tipo de marco
+    type Stack = [Frame]
+    -- Tipo de marco
     data Frame = SuccF Pending
                | PredF Pending
                | NotF Pending
@@ -110,10 +102,12 @@ module BAE.Sintax where
                | LetF Identifier Pending Expr
                | AllocF Pending -- ^ Guardar en memoria
                | DerefF Pending -- ^ Borrar de memeoria
-               | AssigFL Pending Expr -- ^ Actualizar
-               | AssigFR Expr Pending -- ^ Actualizar
-               | SeqF Pending Expr -- ^ Secuencia de instrucciones
-               | WhileF Pending Expr -- ^ Ciclo de control
+               | AssingFL Pending Expr -- ^ Actualizar
+               | AssingFR Expr Pending -- ^ Actualizar
+               | SeqFL Pending Expr -- ^ Secuencia de instrucciones
+               | SeqFR Expr Pending -- ^ Secuencia de instrucciones
+               | WhileFL Pending Expr -- ^ Ciclo de control
+               | WhileFR Expr Pending -- ^ Ciclo de control
                | RaiseF Pending
                | HandleF Pending Identifier Expr
                | ContinueFL Pending Expr
@@ -122,41 +116,42 @@ module BAE.Sintax where
 
     -- Show para marcos
     instance Show Frame where
-        show ex =
-          case ex of
-            (SuccF _) -> "suc(-)"
-            (PredF _) -> "pred(-)"
-            (NotF _) -> "not(-)"
-            (FnF _) -> "fn(-)"
-            (AddFL _ e) -> "add(-, " ++ (show e) ++ ")"
-            (AddFR e _) -> "add(" ++ (show e) ++ ", -)"
-            (MulFL _ e) -> "mul(-, " ++ (show e) ++ ")"
-            (MulFR e _) -> "mul(" ++ (show e) ++ ", -)"
-            (AndFL _ e) -> "and(-, " ++ (show e) ++ ")"
-            (AndFR e _) -> "and(" ++ (show e) ++ ", -)"
-            (OrFL _ e) -> "or(-, " ++ (show e) ++ ")"
-            (OrFR e _) -> "or(" ++ (show e) ++ ", -)"
-            (LtFL _ e) -> "lt(-, " ++ (show e) ++ ")"
-            (LtFR e _) -> "lt(" ++ (show e) ++ ", -)"
-            (GtFL _ e) -> "gt(-, " ++ (show e) ++ ")"
-            (GtFR e _) -> "gt(" ++ (show e) ++ ", -)"
-            (EqFL _ e) -> "eq(-, " ++ (show e) ++ ")"
-            (EqFR e _) -> "eq(" ++ (show e) ++ ", -)"
-            (AppFL _, e2) -> "app(-, " ++ (show e2) ++ ")"
-            (AppFR e1, _) -> "app(" ++ (show e1) ++ ", -)"
-            (IfF _, e1, e2) -> "if(-, " ++ (show e1) ++ ", " ++ (show e2) ++ ")"
-            (LetF x, _, e2) -> "let(" ++ (show x) ++ "- , " ++ (show e2) ++ ")"
-            (AllocF _) -> "alloc(-)"
-            (DerefF _) -> "deref(-)"
-            (AssigFL _ e) -> "assig(-, " ++ (show e) ++ ")"
-            (AssigFR e _) -> "assig(" ++ (show e) ++ ", -)"
-            (SeqF _ e) -> "seq(-, " ++ (show e) ++ ")"
-            (WhileF _ e) -> "while(-, " ++ (show e) ++ ")"
-            (RaiseF _) -> "raise(-)"
-            (HandleF _, x, e2) -> "handle(-, " ++ (show x) ++ ", " ++ (show e2) ++ ")"
-            (ContinueFL _ e) -> "continue(-, " ++ (show e) ++ ")"
-            (ContinueFR e _) -> "continue(" ++ (show e) ++ ", -)"
-  
+      show ex =
+        case ex of
+          (SuccF _) -> "suc(-)"
+          (PredF _) -> "pred(-)"
+          (NotF _) -> "not(-)"
+          (FnF e _) -> "fn(" ++ (show e) ++ "-)"
+          (AddFL _ e) -> "add(-, " ++ (show e) ++ ")"
+          (AddFR e _) -> "add(" ++ (show e) ++ ", -)"
+          (MulFL _ e) -> "mul(-, " ++ (show e) ++ ")"
+          (MulFR e _) -> "mul(" ++ (show e) ++ ", -)"
+          (AndFL _ e) -> "and(-, " ++ (show e) ++ ")"
+          (AndFR e _) -> "and(" ++ (show e) ++ ", -)"
+          (OrFL _ e) -> "or(-, " ++ (show e) ++ ")"
+          (OrFR e _) -> "or(" ++ (show e) ++ ", -)"
+          (LtFL _ e) -> "lt(-, " ++ (show e) ++ ")"
+          (LtFR e _) -> "lt(" ++ (show e) ++ ", -)"
+          (GtFL _ e) -> "gt(-, " ++ (show e) ++ ")"
+          (GtFR e _) -> "gt(" ++ (show e) ++ ", -)"
+          (EqFL _ e) -> "eq(-, " ++ (show e) ++ ")"
+          (EqFR e _) -> "eq(" ++ (show e) ++ ", -)"
+          (AppFL _ e2) -> "app(-, " ++ (show e2) ++ ")"
+          (AppFR e1 _) -> "app(" ++ (show e1) ++ ", -)"
+          (IfF _ e1 e2) -> "if(-, " ++ (show e1) ++ ", " ++ (show e2) ++ ")"
+          (LetF x _ e2) -> "let(" ++ (show x) ++ "- , " ++ (show e2) ++ ")"
+          (AllocF _) -> "alloc(-)"
+          (DerefF _) -> "deref(-)"
+          (AssingFL _ e) -> "assing(-, " ++ (show e) ++ ")"
+          (AssingFR e _) -> "assing(" ++ (show e) ++ ", -)"
+          (SeqFL _ e) -> "seq(-, " ++ (show e) ++ ")"
+          (SeqFR e _) -> "seq(" ++ (show e) ++ ", -)"
+          (WhileFL _ e) -> "while(-, " ++ (show e) ++ ")"
+          (WhileFR e _) -> "while(" ++ (show e) ++ ", -)"
+          (RaiseF _) -> "raise(-)"
+          (HandleF _ x e2) -> "handle(-, " ++ (show x) ++ "- , " ++ (show e2) ++ ")"
+          (ContinueFL _ e) -> "continue(-, " ++ (show e) ++ ")"
+          (ContinueFR e _) -> "continue(" ++ (show e) ++ ", -)"
 
     -- | La asignacion de variables sera emulada usando substitucion textual
     type Substitution = (Identifier, Expr)
@@ -191,9 +186,10 @@ module BAE.Sintax where
             (Seq e f) -> union (frVars e) (frVars f)
             (While e f) -> union (frVars e) (frVars f)
             (Raise e) -> frVars e
-            (Handle i e f) -> union (frVars e) ((frVars f) \\ [i])
-            (Letcc) ->
+            (Handle e i f) -> union (frVars e) ((frVars f) \\ [i])
+            (LetCC i e) -> (frVars e) \\ [i]
             (Continue e f) -> union (frVars e) (frVars f)
+            (Cont s) -> []
 
     -- | Incrementa el sufijo numerico de un identificador. Si no hay valor numerico
     -- presente, entonces añade '1' al final del identificador.
@@ -215,7 +211,7 @@ module BAE.Sintax where
         let x' = (incrVar x) in
             if elem x' (frVars e)
                 then safeName x' e
-                else x'
+            else x'
 
     -- | Funcion que realiza alpha reduccion
     alphaExpr :: Expr -> Expr
@@ -230,8 +226,10 @@ module BAE.Sintax where
             Fix x e ->
                 let x' = safeName x e; e' = subst e (x, V x') in
                     Fix x' e'
+            Handle e1 x e2 ->
+                let x' = safeName x e2; e2' = subst e2 (x, V x') in
+                    Handle e1 x' e2'
             _ -> ex
-
 
     -- | Aplicando substitucion si es semanticamente posible
     subst :: Expr -> Substitution -> Expr
@@ -272,6 +270,17 @@ module BAE.Sintax where
             (Void) -> ex
             (Seq e f) -> Seq (st e) (st f)
             (While e f) -> While (st e) (st f)
+            (Raise e) -> Raise (st e)
+            (Handle e x f) ->
+                if x == y || elem x (frVars e')
+                  then st (alphaExpr ex)
+                else Handle e x (st f)
+            (LetCC x e) ->
+                if x == y || elem x (frVars e')
+                  then st (alphaExpr ex)
+                else LetCC x (st e)
+            (Continue e f) -> Continue (st e) (st f)
+            (Cont a) -> Cont a
         where st = (flip subst) s
 
     -- | Dice si dos expresiones son alpha equivalentes
@@ -296,5 +305,15 @@ module BAE.Sintax where
         (alphaEq e1c e2c) && (alphaEq e11 e21) && (alphaEq e12 e22)
     alphaEq (Let x e11 e12) (Let y e21 e22) =
         (alphaEq e11 e21) && (alphaEq e12 (subst e22 (y, V x)))
-    alphaEq (Cont e1) (Cont e2) = e1 == e2
+    alphaEq (Alloc e) (Alloc f) = alphaEq e f
+    alphaEq (Deref e) (Deref f) = alphaEq e f
+    alphaEq (Assig e1 e2) (Assig f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
+    alphaEq (Seq e1 e2) (Seq f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
+    alphaEq (While e1 e2) (While f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
+    alphaEq (Raise e) (Raise f) = alphaEq e f
+    alphaEq (Handle e1 x e2) (Handle f1 y f2) =
+      (alphaEq e1 f1) && (alphaEq e2 (subst f2 (y, (V x))))
+    alphaEq (LetCC x e) (LetCC y f) = (alphaEq e (subst f (y, (V x))))
+    alphaEq (Continue e1 e2) (Continue f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
+    alphaEq (Cont s1) (Cont s2) = s1 == s2
     alphaEq _ _ = False
