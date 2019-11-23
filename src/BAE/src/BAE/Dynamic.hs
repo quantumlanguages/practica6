@@ -13,44 +13,10 @@ module BAE.Dynamic where
   import qualified BAE.Static as Static
   import qualified BAE.Type as Type
 
-  type Pending = ()
-  data Frame = 
-     SuccF Pending
-    | PredF Pending
-    | NotF Pending
-    | FnF Identifier Pending
-    | AddFL Pending Expr
-    | AddFR Expr Pending
-    | MulFL Pending Expr
-    | MulFR Expr Pending
-    | AndFL Pending Expr
-    | AndFR Expr Pending
-    | OrFL Pending Expr
-    | OrFR Expr Pending
-    | LtFL Pending Expr
-    | LtFR Expr Pending
-    | GtFL Pending Expr
-    | GtFR Expr Pending
-    | EqFL Pending Expr
-    | EqFR Expr Pending
-    | AppFL Pending Expr
-    | AppFR Expr Pending
-    | IfF Pending Expr Expr
-    | LetF Identifier Pending Expr
-    | AllocF Pending -- ^ Guardar en memoria
-    | DerefF Pending -- ^ Borrar de memeoria
-    | AssingFL Pending Expr -- ^ Actualizar
-    | AssingFR Expr Pending -- ^ Actualizar
-    | SeqF Pending Expr -- ^ Secuencia de instrucciones
-    | WhileF Pending Expr -- ^ Ciclo de control
-    | RaiseF Pending
-    | HandleF Pending Identifier Expr
-    | ContinueFL Pending Expr
-    | ContinueFR Expr Pending
-
   type Stack = [Frame]
 
-  data State = E (Stack, Memory, Expr) | R (Stack, Memory, Expr) | P (Stack, Memory, Expr)
+  data State = E (Stack, Memory, Expr) | R (Stack, Memory, Expr) 
+              | P (Stack, Memory, Expr)
 
   eval1 :: State -> State
   eval1 (E (s, m, e)) = case e of
@@ -113,7 +79,7 @@ module BAE.Dynamic where
                       (Raise e1) -> E ((RaiseF Pending):s, m, e1)
                       (Continue e1 e2) ->
                         case e1 of
-                          (Cont st) -> E ((ContinueFR (Cont st) Pending):s, m, e2)
+                          (Cont st)-> E ((ContinueFR (Cont st) Pending):s, m,e2)
                           _ -> E ((ContinueFL Pending (e2)):s, m, e1)
                       (Handle e1 i e2) -> E ((HandleF Pending i e2):s, m, e1)
                       --ternarias
@@ -226,6 +192,11 @@ module BAE.Dynamic where
           ((FnF x _) : s') -> R (s', mem, Fn x e)
           ((AppFR (Fn x e2) _) : s') -> E (s', mem, subst e2 (x, e))
           ((LetF x _ e2) : s') -> E (s', mem, subst e2 (x, e))
+          ((AllocF _) : s') -> 
+            let l = newAddress mem in 
+              case l of 
+                (L i) -> R (s', (i, e):mem, l)
+                _ -> P (s, mem, e)
           ((AssignFR e1 _) : s') -> 
             case update (i, e) mem of
               Just mem' -> R (s', mem', Void)
@@ -240,6 +211,11 @@ module BAE.Dynamic where
           ((FnF x _) : s') -> R (s', Fn x e)
           ((App _ e2) : s') -> E (s', Sintax.subst e2 (x, e))
           ((LetFL x _ e2) : s') -> E (s', Sintax.subst e2 (x, e))
+          ((AllocF _) : s') -> 
+            let l = newAddress mem in 
+              case l of 
+                (L i) -> R (s', (i, e):mem, l)
+                _ -> P (s, mem, e)
           ((AssignFR e1 _) : s') -> 
             case update (i, e) mem of
               Just mem' -> R (s', mem', Void)
@@ -259,8 +235,31 @@ module BAE.Dynamic where
       (_:s') -> P (s', mem, Error)
 
 
--- Antiguo eval1
+  evale :: State -> State
+  evale s@(E (st, mem, e)) = 
+    case st of
+      [] -> s
+      _ -> evale (eval1 s)
+  evale s@(R (st, mem, e)) = 
+    case st of
+      [] -> s
+      _ -> evale (eval1 s)
+  evale s@(P (st, mem, e)) = 
+    case st of
+      [] -> s
+      _ -> evale (eval1 s)
+
+  eval :: Expr -> Expr
+  eval e = 
+    case evale (E ([], [], e)) of
+      R ([], mem, e') -> 
+        case e' of
+          B _ -> e'
+          I _ - e'
+          _ -> error "invalid final value"
+
 {--
+-- Antiguo eval1
   eval1 (mem, expr) =
     case expr of
       I n -> error "blocked state: integer"
@@ -333,7 +332,6 @@ module BAE.Dynamic where
           else let (mem', e2') = eval1' e2 in (mem', Assig (L i) e2')
       Assig e1 e2 -> let (mem', e1') = eval1' e1 in (mem', Assig e1' e2)
     where eval1' = (\e -> eval1 (mem, e)); sM = (\x -> (mem, x))
---}
 
   evals :: State -> State
   evals (E (s, e)) = evals (eval1 (E (s, e)))
@@ -348,6 +346,7 @@ module BAE.Dynamic where
       then s
       else evals s
 
+-- Antigua evale
   evale :: Expr -> Expr
   evale ex =
     let (_, ex') = evals ([], ex)
@@ -378,7 +377,7 @@ module BAE.Dynamic where
           Fn _ _ -> error "[Fn] Expected argument"
           App _ _ -> error "[App] Expected function as first argument"
 
-
+-- Antiguo eval
   eval :: Expr -> Type.Type -> Expr
   eval e t =
     let (ctx, t') = Static.infer e
@@ -388,3 +387,4 @@ module BAE.Dynamic where
           if (t /= t')
             then error ("Type error: " ++ (show t) ++ " is not " ++ (show t'))
             else evale e
+  --}
