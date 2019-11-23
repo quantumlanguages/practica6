@@ -75,7 +75,12 @@ module BAE.Sintax where
             (Void) -> "void"
             (Seq e1 e2) -> (show e1) ++ " ; " ++ (show e2)
             (While e1 e2) -> "while(" ++ (show e1) ++ ") do " ++ (show e2) ++ " end"
-            (Raise e) -> "err(" ++ (show e) ++ ")"
+            (Raise e1) -> "raise(" ++ (show e1) ++ ")"
+            (Handle e1 x e2) -> "handle " ++ (show e1) ++ "{"++ (show x) ++" => e2}"
+            (Letcc x e1) -> "letcc(" ++ (show x) ++ "." ++ (show e1) ++ ")"
+            (Continue e1 e2) -> "cont(" ++ (show e1) ++ (show e2) ++ ")"
+            (Cont s) -> "cont(" ++ (show s) ++ ")"
+            (Error) -> "error"
 
     -- Tipo de marcos vacíos
     type Pending = ()
@@ -116,20 +121,42 @@ module BAE.Sintax where
                deriving (Eq, Show)
 
     -- Show para marcos
-    {--
-    instance Show Frame where
-      show ex =
-        case ex of
-          (SuccF _) -> "suc(-)"
-          (PredF _) -> "pred(-)"
-          (NotF _) -> "not(-)"
-          (FnF _ e1) -> "fn(-" ++ (show e1) ++ ")"
-          (AddFL _ e) -> "add(-, " ++ (show e) ++ ")"
-          (AddFR e _) -> "add(" ++ (show e) ++ ", -)"
-          (IfF _ e1 e2) -> "if(-, " ++ (show e1) ++ ", " ++ (show e2) ++ ")"
-          (AppFL _ e2) -> "app(-, " ++ (show e2) ++ ")"
-          (AppFR e1 _) -> "app(" ++ (show e1) ++ ", -)"
-    --}
+    instance Show Expr where
+        show ex =
+          case ex of
+            (SuccF _) -> "suc(-)"
+            (PredF _) -> "pred(-)"
+            (NotF _) -> "not(-)"
+            (FnF _) -> "fn(-)"
+            (AddFL _ e) -> "add(-, " ++ (show e) ++ ")"
+            (AddFR e _) -> "add(" ++ (show e) ++ ", -)"
+            (MulFL _ e) -> "mul(-, " ++ (show e) ++ ")"
+            (MulFR e _) -> "mul(" ++ (show e) ++ ", -)"
+            (AndFL _ e) -> "and(-, " ++ (show e) ++ ")"
+            (AndFR e _) -> "and(" ++ (show e) ++ ", -)"
+            (OrFL _ e) -> "or(-, " ++ (show e) ++ ")"
+            (OrFR e _) -> "or(" ++ (show e) ++ ", -)"
+            (LtFL _ e) -> "lt(-, " ++ (show e) ++ ")"
+            (LtFR e _) -> "lt(" ++ (show e) ++ ", -)"
+            (GtFL _ e) -> "gt(-, " ++ (show e) ++ ")"
+            (GtFR e _) -> "gt(" ++ (show e) ++ ", -)"
+            (EqFL _ e) -> "eq(-, " ++ (show e) ++ ")"
+            (EqFR e _) -> "eq(" ++ (show e) ++ ", -)"
+            (AppFL _, e2) -> "app(-, " ++ (show e2) ++ ")"
+            (AppFR e1, _) -> "app(" ++ (show e1) ++ ", -)"
+            (IfF _, e1, e2) -> "if(-, " ++ (show e1) ++ ", " ++ (show e2) ++ ")"
+            (LetF x, _, e2) -> "let(" ++ (show x) ++ "- , " ++ (show e2) ++ ")"
+            (AllocF _) -> "alloc(-)"
+            (DerefF _) -> "deref(-)"
+            (AssigFL _ e) -> "assig(-, " ++ (show e) ++ ")"
+            (AssigFR e _) -> "assig(" ++ (show e) ++ ", -)"
+            (SeqF _ e) -> "seq(-, " ++ (show e) ++ ")"
+            (WhileF _ e) -> "while(-, " ++ (show e) ++ ")"
+            (RaiseF _) -> "raise(-)"
+            (HandleF _, x, e2) -> "handle(-, " ++ (show x) ++ "- , " ++ (show e2) ++ ")"
+            (ContinueFL _ e) -> "continue(-, " ++ (show e) ++ ")"
+            (ContinueFR e _) -> "continue(" ++ (show e) ++ ", -)"
+  
 
     -- | La asignacion de variables sera emulada usando substitucion textual
     type Substitution = (Identifier, Expr)
@@ -163,6 +190,10 @@ module BAE.Sintax where
             (Void) -> []
             (Seq e f) -> union (frVars e) (frVars f)
             (While e f) -> union (frVars e) (frVars f)
+            (Raise e) -> frVars e
+            (Handle i e f) -> union (frVars e) ((frVars f) \\ [i])
+            (Letcc) ->
+            (Continue e f) -> union (frVars e) (frVars f)
 
     -- | Incrementa el sufijo numerico de un identificador. Si no hay valor numerico
     -- presente, entonces añade '1' al final del identificador.
